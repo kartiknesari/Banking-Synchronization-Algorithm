@@ -1,0 +1,12 @@
+{
+  "editor.formatOnSave": true,
+  "files.associations": {
+    "netdb.h": "c",
+    "string.h": "c",
+    "socket.h": "c",
+    "timerfd.h": "c",
+    "time.h": "c",
+    "struct_itimerspec.h": "c",
+    "struct_timespec.h": "c"
+  }
+}
