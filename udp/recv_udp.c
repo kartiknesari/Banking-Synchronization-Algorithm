@@ -111,7 +111,7 @@ int main()
 
     s_in.sin_family = (short)AF_INET;
     s_in.sin_addr.s_addr = htonl(INADDR_ANY); /* WILDCARD */
-    s_in.sin_port = htons((unsigned short)0x3333);
+    s_in.sin_port = htons((unsigned short)0x4567);
     printsin(&s_in, "RECV_UDP", "Local socket is:");
     fflush(stdout);
 
