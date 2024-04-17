@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include "../myudp.h"
 #include "../udp_procedures.h"
+#include "../utilities.h"
 
 int send_udp_message(int socket_fd, int hostid, const char *message, const char *destination)
 {
@@ -33,7 +34,7 @@ int send_udp_message(int socket_fd, int hostid, const char *message, const char 
     }
     dest.sin_family = AF_INET;
     bcopy(hostptr->h_addr_list[0], (char *)&dest.sin_addr, hostptr->h_length);
-    dest.sin_port = htons((unsigned short)0x3333);
+    dest.sin_port = htons((unsigned short)UDP_PORT);
 
     if (!strcmp(message, "HELLO"))
         mymsg.cmd = htons(HELLO);
@@ -47,6 +48,7 @@ int send_udp_message(int socket_fd, int hostid, const char *message, const char 
     mymsg.vtime[2] = htons(0);
     mymsg.vtime[3] = htons(0);
     mymsg.vtime[4] = htons(0);
+    strcpy(mymsg.message, message);
 
     /*
         mymsg.cmd = HELLO;
