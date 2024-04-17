@@ -42,22 +42,6 @@ void printsin(struct sockaddr_in *sin, char *m1, char *m2)
            inet_ntoa(sin->sin_addr), ntohs((unsigned short)(sin->sin_port)));
 }
 
-void send_hello(int socket_fd, struct sockaddr_in *dest)
-{
-    struct msg_packet mymsg;
-    mymsg.cmd = htons(HELLO);
-    mymsg.seq = htons(1);
-    mymsg.hostid = htonl(0); // Assuming this server's ID is 0
-    mymsg.tiebreak = htonl(getpid());
-    mymsg.vtime[0] = htons(0);
-    mymsg.vtime[1] = htons(0);
-    mymsg.vtime[2] = htons(0);
-    mymsg.vtime[3] = htons(0);
-    mymsg.vtime[4] = htons(0);
-
-    sendto(socket_fd, &mymsg, sizeof(struct msg_packet), 0, (struct sockaddr *)dest, sizeof(*dest));
-}
-
 void broadcast_request(int socket_fd, HostInfo *hosts, int host_id, struct msg_packet msg)
 {
     for (int i = 0; i < MAX_HOSTS; i++)
@@ -81,16 +65,7 @@ void broadcast_request(int socket_fd, HostInfo *hosts, int host_id, struct msg_p
 
 void sig_alrm(int signo)
 {
-    msg.cmd = htons(HELLO);
-    msg.seq = htons(1);
-    msg.hostid = htonl(host_id);
-    msg.tiebreak = htonl(getpid());
-    msg.vtime[0] = htons(0);
-    msg.vtime[1] = htons(0);
-    msg.vtime[2] = htons(0);
-    msg.vtime[3] = htons(0);
-    msg.vtime[4] = htons(0);
-    broadcast_request(socket_fd, hosts, host_id, msg);
+    printf("\n");
 }
 
 void *message_listener(void *arg)
@@ -110,15 +85,15 @@ void *message_listener(void *arg)
         }
         else
         {
-            printsin(&from, "recv_udp: ", "Packet from:");
-            printf("Got message :: hostID=%d: cmd=%d, seq=%d, tiebreak=%d\n", ntohl(received_msg.hostid), ntohs(received_msg.cmd), ntohs(received_msg.seq), ntohl(received_msg.tiebreak));
+            // printsin(&from, "recv_udp: ", "Packet from:");
+            // printf("Got message :: hostID=%d: cmd=%d, seq=%d, tiebreak=%d\n", ntohl(received_msg.hostid), ntohs(received_msg.cmd), ntohs(received_msg.seq), ntohl(received_msg.tiebreak));
 
             if (ntohs(received_msg.cmd) == REPLY)
             {
                 printf("Received REPLY message from hostID=%d\n", ntohl(received_msg.hostid));
                 msg_replies++;
             }
-            if (ntohs(received_msg.cmd) == REQUEST)
+            else if (ntohs(received_msg.cmd) == REQUEST)
             {
                 // printf("Received REQUEST message from hostID=%d\n", ntohl(received_msg.hostid));
                 int requesting_host_id = ntohl(received_msg.hostid);
@@ -140,6 +115,7 @@ void *message_listener(void *arg)
 
                 bool can_send_reply = false;
 
+                // check if reply can be sent
                 if (!enter_critical)
                 // check if entered critical
                 {
@@ -154,11 +130,9 @@ void *message_listener(void *arg)
                             // if requester timestamp equals host timestamp
                             if (requesting_pid > msg.tiebreak)
                                 can_send_reply = true;
-                            else
-                                can_send_reply = false;
                         }
                         else
-                            can_send_reply = false;
+                            ;
                     }
                     else
                     // host has not sent request message yet
@@ -177,8 +151,8 @@ void *message_listener(void *arg)
                     reply.tiebreak = htonl(getpid());
                     for (int i = 0; i < MAX_HOSTS; i++)
                     {
-                        if (vector_clock[i] < received_msg.vtime[i])
-                            vector_clock[i] = received_msg.vtime[i];
+                        if (vector_clock[i] < ntohs(received_msg.vtime[i]))
+                            vector_clock[i] = ntohs(received_msg.vtime[i]);
                     }
                     for (int i = 0; i < MAX_HOSTS; i++)
                         reply.vtime[i] = htons(vector_clock[i]);
@@ -187,6 +161,10 @@ void *message_listener(void *arg)
 
                     sendto(socket_fd, &reply, sizeof(struct msg_packet), 0, (struct sockaddr *)&from, sizeof(from));
                     printf("Sent REPLY message to hostID=%d\n", requesting_host_id);
+                    printf("New Host VC\n");
+                    for (int i = 0; i < MAX_HOSTS; i++)
+                        printf("%d ", vector_clock[i]);
+                    printf("\n");
                 }
                 else
                 {
@@ -199,49 +177,21 @@ void *message_listener(void *arg)
                     printf("\n");
                 }
             }
-
-            if (ntohs(received_msg.cmd) == UPDATE)
+            else if (ntohs(received_msg.cmd) == UPDATE)
             {
                 account_balance = ntohl(received_msg.account_balance);
             }
-
-            // if (ntohs(msg.cmd) == HELLO)
-            // {
-            //     struct msg_packet reply;
-            //     reply.cmd = htons(HELLO_REPLY);
-            //     reply.seq = htons(1);
-            //     reply.hostid = htonl(host_id);
-            //     reply.tiebreak = htonl(getpid());
-            //     reply.vtime[0] = htons(0);
-            //     reply.vtime[1] = htons(0);
-            //     reply.vtime[2] = htons(0);
-            //     reply.vtime[3] = htons(0);
-            //     reply.vtime[4] = htons(0);
-
-            //     sendto(socket_fd, &reply, sizeof(struct msg_packet), 0, (struct sockaddr *)&from, sizeof(from));
-            //     printf("Sent HELLO_REPLY message to %s\n", inet_ntoa(from.sin_addr));
-
-            //     int alrm_time = 0;
-            //     switch (host_id)
-            //     {
-            //     case 1:
-            //         alrm_time = 2;
-            //         break;
-            //     case 2:
-            //         alrm_time = 3;
-            //         break;
-            //     case 3:
-            //         alrm_time = 5;
-            //         break;
-            //     case 4:
-            //         alrm_time = 7;
-            //         break;
-            //     default:
-            //         break;
-            //     }
-            //     signal(SIGALRM, sig_alrm);
-            //     alarm(alrm_time); // set the timer
-            // }
+            else if (ntohs(received_msg.cmd) == HELLO)
+            {
+                struct msg_packet reply;
+                reply.cmd = htons(HELLO_REPLY);
+                reply.seq = htons(1);
+                reply.hostid = htonl(host_id);
+                reply.tiebreak = htonl(getpid());
+                sendto(socket_fd, &reply, sizeof(struct msg_packet), 0, (struct sockaddr *)&from, sizeof(from));
+            }
+            else
+                ;
             fflush(stdout);
         }
     }
@@ -306,11 +256,12 @@ int distributed_mutex_lock()
     // Step 1: Broadcast a timestamped REQUEST message to all other processes
     msg.cmd = htons(REQUEST);
     msg.seq = htons(1);
-    msg.hostid = htonl(host_id); // Assuming this server's ID is 0
+    msg.hostid = htonl(host_id);
     msg.tiebreak = htonl(getpid());
-    vector_clock[host_id] += 1;
+    // vector_clock[host_id] += 1;
     for (int i = 0; i < MAX_HOSTS; i++)
         msg.vtime[i] = htons(vector_clock[i]);
+    msg.vtime[host_id] = htons(vector_clock[host_id] + 1);
     msg.account_balance = htonl(account_balance);
 
     request_flag = true;
@@ -331,6 +282,7 @@ int distributed_mutex_unlock()
 {
     // Iterate through the RD array and send deferred REPLY messages
     struct msg_packet reply;
+    vector_clock[host_id] += 1;
     for (int j = 0; j < MAX_HOSTS; j++)
     {
         if (RD[j] == 1)
@@ -404,13 +356,30 @@ int main()
         }
         for (int i = 0; i < 20; i++)
         {
+            sleep(3);
             if (!distributed_mutex_lock())
             {
-                account_balance += ((host_id + 1) * 10);
-                account_balance -= host_id;
-                account_balance += ((host_id + 1) * 10);
-                account_balance -= ((host_id + 1) * 3);
-                printf("account Balance: %u", account_balance);
+                switch (host_id)
+                {
+                case 0:
+                    account_balance += 100;
+                    break;
+                case 1:
+                    account_balance += 50;
+                    break;
+                case 2:
+                    account_balance -= 10;
+                    break;
+                case 3:
+                    account_balance -= 40;
+                    break;
+                case 4:
+                    account_balance += 5;
+                    break;
+                default:
+                    account_balance += 0;
+                }
+                printf("account Balance: %d\n", account_balance);
                 distributed_mutex_unlock();
             }
         }
@@ -421,38 +390,6 @@ int main()
         return 1;
     }
 
-    // // If this host is the first host (host_id == 0), send HELLO messages to other hosts
-    // if (host_id == 0)
-    // {
-    //     for (int i = 0; i < MAX_HOSTS; i++)
-    //     {
-    //         if (host_id != hosts[i].id)
-    //         {
-    //             char *temp_hostname = (char *)malloc(strlen(hosts[i].hostname) + strlen(".eecs.csuohio.edu") + 1);
-    //             if (temp_hostname == NULL)
-    //             {
-    //                 perror("Memory allocation failed");
-    //                 return 1;
-    //             }
-    //             strcpy(temp_hostname, hosts[i].hostname);
-    //             strcat(temp_hostname, ".eecs.csuohio.edu");
-
-    //             msg.cmd = htons(HELLO);
-    //             msg.seq = htons(1);
-    //             msg.hostid = htonl(host_id);
-    //             msg.tiebreak = htonl(getpid());
-    //             msg.vtime[0] = htons(0);
-    //             msg.vtime[1] = htons(1);
-    //             msg.vtime[2] = htons(0);
-    //             msg.vtime[3] = htons(0);
-    //             msg.vtime[4] = htons(0);
-
-    //             send_udp_message(socket_fd, host_id, "HELLO", temp_hostname, msg);
-    //             printf("Sent HELLO message to %s\n", temp_hostname);
-    //             free(temp_hostname);
-    //         }
-    //     }
-    // }
     while (1)
         ;
     return 0;
