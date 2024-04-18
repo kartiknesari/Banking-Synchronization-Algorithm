@@ -34,6 +34,9 @@ int vector_clock[5];
 bool enter_critical;
 bool request_flag;
 
+pthread_cond_t replies_cv = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t replies_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 void printsin(struct sockaddr_in *sin, char *m1, char *m2)
 {
 
@@ -85,13 +88,13 @@ void *message_listener(void *arg)
         }
         else
         {
-            // printsin(&from, "recv_udp: ", "Packet from:");
-            // printf("Got message :: hostID=%d: cmd=%d, seq=%d, tiebreak=%d\n", ntohl(received_msg.hostid), ntohs(received_msg.cmd), ntohs(received_msg.seq), ntohl(received_msg.tiebreak));
-
             if (ntohs(received_msg.cmd) == REPLY)
             {
-                printf("Received REPLY message from hostID=%d\n", ntohl(received_msg.hostid));
+                // printf("Received REPLY message from hostID=%d\n", ntohl(received_msg.hostid));
+                pthread_mutex_lock(&replies_mutex);
                 msg_replies++;
+                pthread_cond_signal(&replies_cv);
+                pthread_mutex_unlock(&replies_mutex);
             }
             else if (ntohs(received_msg.cmd) == REQUEST)
             {
@@ -99,19 +102,6 @@ void *message_listener(void *arg)
                 int requesting_host_id = ntohl(received_msg.hostid);
                 int requesting_pid = ntohl(received_msg.tiebreak);
                 int requesting_timestamp = ntohs(received_msg.vtime[requesting_host_id]);
-
-                // Check if site Sj is neither requesting nor executing the CS
-                // or if Sj is requesting and Si's request's timestamp is smaller
-                // or if the timestamps are concurrent but Si's PID is smaller
-                printf("Requesting Host ID: %d\n", requesting_host_id);
-                for (int i = 0; i < MAX_HOSTS; i++)
-                    printf("%hu ", ntohs(received_msg.vtime[i]));
-                printf("\n");
-                printf("Host ID: %d\n", host_id);
-                for (int i = 0; i < MAX_HOSTS; i++)
-                    printf("%d ", vector_clock[i]);
-                printf("\n");
-                // bool can_send_reply = (!RD[host_id] && (requesting_timestamp < vector_clock[host_id])) || ((requesting_timestamp == vector_clock[host_id] && requesting_pid < ntohl(msg.tiebreak)));
 
                 bool can_send_reply = false;
 
@@ -156,30 +146,21 @@ void *message_listener(void *arg)
                     }
                     for (int i = 0; i < MAX_HOSTS; i++)
                         reply.vtime[i] = htons(vector_clock[i]);
-                    // memcpy(reply.vtime, vector_clock, sizeof(msg.vtime));
                     // msg.account_balance = reply.account_balance;
 
                     sendto(socket_fd, &reply, sizeof(struct msg_packet), 0, (struct sockaddr *)&from, sizeof(from));
-                    printf("Sent REPLY message to hostID=%d\n", requesting_host_id);
-                    printf("New Host VC\n");
-                    for (int i = 0; i < MAX_HOSTS; i++)
-                        printf("%d ", vector_clock[i]);
-                    printf("\n");
                 }
                 else
                 {
                     // Defer the reply and set RD[i] = 1
-                    printf("Deferring the reply\n");
+                    // printf("Deferring the reply\n");
                     RD[requesting_host_id] = 1;
-                    printf("Deferred Array: ");
-                    for (int i = 0; i < MAX_HOSTS; i++)
-                        printf("%d ", RD[i]);
-                    printf("\n");
                 }
             }
             else if (ntohs(received_msg.cmd) == UPDATE)
             {
                 account_balance = ntohl(received_msg.account_balance);
+                printf("Account Balance: %d\n", account_balance);
             }
             else if (ntohs(received_msg.cmd) == HELLO)
             {
@@ -228,7 +209,7 @@ int distributed_mutex_init()
         s_in.sin_family = (short)AF_INET;
         s_in.sin_addr.s_addr = htonl(INADDR_ANY); /* WILDCARD */
         s_in.sin_port = htons((unsigned short)UDP_PORT);
-        printsin(&s_in, "RECV_UDP", "Local socket is:");
+        // printsin(&s_in, "RECV_UDP", "Local socket is:");
         fflush(stdout);
 
         // Bind the socket to the specified port
@@ -253,12 +234,11 @@ int distributed_mutex_init()
 
 int distributed_mutex_lock()
 {
-    // Step 1: Broadcast a timestamped REQUEST message to all other processes
+    // Step 1: broadcast a timestamped message
     msg.cmd = htons(REQUEST);
     msg.seq = htons(1);
     msg.hostid = htonl(host_id);
     msg.tiebreak = htonl(getpid());
-    // vector_clock[host_id] += 1;
     for (int i = 0; i < MAX_HOSTS; i++)
         msg.vtime[i] = htons(vector_clock[i]);
     msg.vtime[host_id] = htons(vector_clock[host_id] + 1);
@@ -269,10 +249,12 @@ int distributed_mutex_lock()
     broadcast_request(socket_fd, hosts, host_id, msg);
 
     // Step 2: Wait for REPLY messages from all other processes
+    pthread_mutex_lock(&replies_mutex);
     while (msg_replies < MAX_HOSTS - 1)
-        ;
+        pthread_cond_wait(&replies_cv, &replies_mutex);
+    pthread_mutex_unlock(&replies_mutex);
 
-    printf("Entering critical section\n");
+    // printf("Entering critical section\n");
     enter_critical = true;
     request_flag = false;
     return 0;
@@ -304,7 +286,7 @@ int distributed_mutex_unlock()
             inet_pton(AF_INET, hosts[j].hostname, &dest.sin_addr);
 
             sendto(socket_fd, &reply, sizeof(struct msg_packet), 0, (struct sockaddr *)&dest, sizeof(dest));
-            printf("Sent deferred REPLY message to hostID=%d\n", j);
+            // printf("Sent deferred REPLY message to hostID=%d\n", j);
 
             // Reset the RD[j] flag
             RD[j] = 0;
@@ -321,7 +303,7 @@ int distributed_mutex_unlock()
     broadcast_request(socket_fd, hosts, host_id, reply);
 
     enter_critical = false;
-    printf("Out of Critical Section\n");
+    // printf("Out of Critical Section\n");
     return 0;
 }
 
@@ -336,7 +318,7 @@ int main()
         perror("Host does not exist in process.hosts file\n");
         return 1;
     }
-    printf("host id: %d\n", host_id);
+    // printf("host id: %d\n", host_id);
 
     // Initialize the distributed mutex
 
@@ -350,13 +332,12 @@ int main()
             scanf("%s", demo);
             if (!strcmp(demo, "Yes") || !strcmp(demo, "yes") || !strcmp(demo, "Y") || !strcmp(demo, "y"))
             {
-
                 entry_flag = 1;
             }
         }
         for (int i = 0; i < 20; i++)
         {
-            sleep(3);
+            sleep(1);
             if (!distributed_mutex_lock())
             {
                 switch (host_id)
@@ -371,7 +352,7 @@ int main()
                     account_balance -= 10;
                     break;
                 case 3:
-                    account_balance -= 40;
+                    account_balance -= 5;
                     break;
                 case 4:
                     account_balance += 5;
@@ -379,7 +360,7 @@ int main()
                 default:
                     account_balance += 0;
                 }
-                printf("account Balance: %d\n", account_balance);
+                // printf("account Balance: %d\n", account_balance);
                 distributed_mutex_unlock();
             }
         }
@@ -389,7 +370,7 @@ int main()
         fprintf(stderr, "Error initializing distributed mutex\n");
         return 1;
     }
-
+    printf("Account Balance: %d\n", account_balance);
     while (1)
         ;
     return 0;
