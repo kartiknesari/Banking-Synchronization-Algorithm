@@ -11,14 +11,11 @@
 #include <netdb.h>
 #include "../myudp.h"
 #include "../udp_procedures.h"
-#include "../utilities.h"
 
-int send_udp_message(int socket_fd, int hostid, const char *message, const char *destination)
+int send_udp_message(int socket_fd, int hostid, const char *message, const char *destination, struct msg_packet mymsg)
 {
     struct sockaddr_in dest;
     struct hostent *gethostbyname(), *hostptr;
-
-    struct msg_packet mymsg;
 
     /*
        The inet socket address data structure "dest" will be used to
@@ -29,26 +26,21 @@ int send_udp_message(int socket_fd, int hostid, const char *message, const char 
     bzero((char *)&dest, sizeof(dest)); /* They say you must do this */
     if ((hostptr = gethostbyname(destination)) == NULL)
     {
-        fprintf(stderr, "send_udp: invalid host name, %s\n", destination);
+        // fprintf(stderr, "send_udp: invalid host name, %s\n", destination);
         return -1; // Indicate failure
     }
     dest.sin_family = AF_INET;
     bcopy(hostptr->h_addr_list[0], (char *)&dest.sin_addr, hostptr->h_length);
     dest.sin_port = htons((unsigned short)UDP_PORT);
 
-    if (!strcmp(message, "HELLO"))
-        mymsg.cmd = htons(HELLO);
-    else
-        mymsg.cmd = htons(HELLO_REPLY);
-    mymsg.seq = htons(1);
-    mymsg.hostid = htonl(hostid);
-    mymsg.tiebreak = htonl(getpid());
-    mymsg.vtime[0] = htons(0);
-    mymsg.vtime[1] = htons(1);
-    mymsg.vtime[2] = htons(0);
-    mymsg.vtime[3] = htons(0);
-    mymsg.vtime[4] = htons(0);
-    strcpy(mymsg.message, message);
+    // mymsg.seq = htons(1);
+    // mymsg.hostid = htonl(hostid);
+    // mymsg.tiebreak = htonl(getpid());
+    // mymsg.vtime[0] = htons(0);
+    // mymsg.vtime[1] = htons(1);
+    // mymsg.vtime[2] = htons(0);
+    // mymsg.vtime[3] = htons(0);
+    // mymsg.vtime[4] = htons(0);
 
     /*
         mymsg.cmd = HELLO;

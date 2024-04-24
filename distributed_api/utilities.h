@@ -4,8 +4,6 @@
 #define MAX_HOSTS 5
 #define MAX_HOSTNAME_LENGTH 256
 
-#define UDP_PORT 0x6874
-
 typedef struct
 {
     char hostname[MAX_HOSTNAME_LENGTH];

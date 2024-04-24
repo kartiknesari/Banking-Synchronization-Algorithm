@@ -57,7 +57,7 @@ void broadcast_hello(int socket_fd, HostInfo *hosts, int host_id)
             strcpy(temp_hostname, hosts[i].hostname);
             strcat(temp_hostname, ".eecs.csuohio.edu");
             send_udp_message(socket_fd, host_id, "HELLO", temp_hostname);
-            printf("Sent HELLO message to %s\n", temp_hostname);
+            // printf("Sent HELLO message to %s\n", temp_hostname);
             free(temp_hostname);
         }
     }
@@ -86,7 +86,7 @@ int main()
         perror("Host does not exist in process.hosts file\n");
         exit(1);
     }
-    printf("host id: %d\n", host_id);
+    // printf("host id: %d\n", host_id);
 
     /*
        Create the socket to be used for datagram reception. Initially,
@@ -111,8 +111,8 @@ int main()
 
     s_in.sin_family = (short)AF_INET;
     s_in.sin_addr.s_addr = htonl(INADDR_ANY); /* WILDCARD */
-    s_in.sin_port = htons((unsigned short)0x3333);
-    printsin(&s_in, "RECV_UDP", "Local socket is:");
+    s_in.sin_port = htons((unsigned short)UDP_PORT);
+    // printsin(&s_in, "RECV_UDP", "Local socket is:");
     fflush(stdout);
 
     /*
@@ -139,7 +139,7 @@ int main()
                 strcpy(temp_hostname, hosts[i].hostname);
                 strcat(temp_hostname, ".eecs.csuohio.edu");
                 send_udp_message(socket_fd, host_id, "HELLO", temp_hostname);
-                printf("Sent HELLO message to %s\n", temp_hostname);
+                // printf("Sent HELLO message to %s\n", temp_hostname);
                 free(temp_hostname);
             }
         }
@@ -150,8 +150,8 @@ int main()
         cc = recvfrom(socket_fd, &msg, sizeof(struct msg_packet), 0, (struct sockaddr *)&from, &fsize);
         if (cc < 0)
             perror("recv_udp:recvfrom");
-        printsin(&from, "recv_udp: ", "Packet from:");
-        printf("Got message :: hostID=%d: cmd=%d, seq=%d, tiebreak=%d\n", ntohl(msg.hostid), ntohs(msg.cmd), ntohs(msg.seq), ntohl(msg.tiebreak));
+        // printsin(&from, "recv_udp: ", "Packet from:");
+        printf("message received :: sender ID=%d: content=%s\n", ntohl(msg.hostid), msg.message);
 
         if (ntohs(msg.cmd) == HELLO)
         {
@@ -165,9 +165,10 @@ int main()
             reply.vtime[2] = htons(0);
             reply.vtime[3] = htons(0);
             reply.vtime[4] = htons(0);
+            strcpy(reply.message, "HELLO_REPLY");
 
             sendto(socket_fd, &reply, sizeof(struct msg_packet), 0, (struct sockaddr *)&from, sizeof(from));
-            printf("Sent HELLO_REPLY message to %s\n", inet_ntoa(from.sin_addr));
+            // printf("Sent HELLO_REPLY message to %s\n", inet_ntoa(from.sin_addr));
 
             int alrm_time = 0;
             switch (host_id)
