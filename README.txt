@@ -1,8 +1,3 @@
-Group 17:
-   Team members and contribution:
-      Nithin Sai Bogapathi - 2879115 - 50%
-      Kartik Manish Nesari - 2860740 - 50%
-
 Design Detail:
 
 1. Overall
